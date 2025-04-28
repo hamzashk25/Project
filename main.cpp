@@ -564,6 +564,7 @@ void NationalElection::displayResults()
 // Main program
 int main()
 {
+    cout<<"\nOnline Voting System\n";
     // Initialize some sample data
     ofstream userFile("users.txt");
     if (userFile.is_open())
