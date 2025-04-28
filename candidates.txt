@@ -1,0 +1,3 @@
+CityCouncil ali YellowParty 80
+CityCouncil hassan PurpleParty 67
+cm hamza lion 23

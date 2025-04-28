@@ -1,0 +1,3 @@
+Mayor2023 voter1 Alice 1683000000
+Presidential2024 john Carol 1700000000
+CityCouncil voter2 Eve 1684500000
