@@ -1,11 +1,13 @@
 // Online Voting System
 
 #include <iostream>
+// #include<ctype>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <cstring>
 #include <ctime>
+#include <iomanip>
 using namespace std;
 
 // Forward declarations
@@ -20,6 +22,8 @@ class Candidate;
 const int MAX_CANDIDATES = 50;
 const int MAX_USERS = 100;
 const int MAX_ELECTIONS = 20;
+
+void DisplayMainMenu();
 
 // Base User class
 class User
@@ -58,7 +62,8 @@ public:
         }
     }
 
-    static User *authenticateUser(const string &username, const string &password);
+    static User *authenticateAdmin(const string &username, const string &password);
+    static User *authenticatevoter(const string &username, const string &password);
 };
 
 // Candidate class
@@ -156,10 +161,10 @@ private:
     string district;
 
 public:
-    LocalElection(string n, string s, string e, string d = "Default District")
+    LocalElection(string n, string s, string e, string d="Default District")
         : Election(n, "local", s, e), district(d) {}
 
-    void displayDetails() override;
+    void displayDetails()  override;
     void conductElection() override;
     void displayResults() override;
 };
@@ -182,7 +187,28 @@ public:
 // Now implement all the methods that were declared earlier:
 
 // User methods
-User *User::authenticateUser(const string &username, const string &password)
+User *User::authenticateAdmin(const string &username, const string &password)
+{
+    ifstream inFile("users.txt");
+    if (inFile.is_open())
+    {
+        string uname, pwd, role;
+        while (inFile >> uname >> pwd >> role)
+        {
+            if (uname == username && pwd == password)
+            {
+                if (role == "admin")
+                {
+                    return new Administrator(uname, pwd);
+                }
+            }
+        }
+        inFile.close();
+    }
+    return nullptr;
+}
+
+User *User::authenticatevoter(const string &username, const string &password)
 {
     ifstream inFile("users.txt");
     if (inFile.is_open())
@@ -196,17 +222,12 @@ User *User::authenticateUser(const string &username, const string &password)
                 {
                     return new Voter(uname, pwd);
                 }
-                else if (role == "admin")
-                {
-                    return new Administrator(uname, pwd);
-                }
             }
         }
         inFile.close();
     }
     return nullptr;
 }
-
 // Candidate methods
 Candidate *Candidate::loadCandidates(string electionName, int &count)
 {
@@ -287,7 +308,8 @@ Election *Election::loadElection(string name)
 // Voter methods
 void Voter::displayMenu()
 {
-    int choice;
+    char choice;
+    bool flag=true;
     do
     {
         cout << "\nVoter Menu:\n";
@@ -300,22 +322,23 @@ void Voter::displayMenu()
 
         switch (choice)
         {
-        case 1:
+        case '1':
             viewElections();
             break;
-        case 2:
+        case '2':
             castVote();
             break;
-        case 3:
+        case  '3':
             checkVoteStatus();
             break;
-        case 4:
+        case '4':
             cout << "Logging out...\n";
+            flag=false;
             break;
         default:
             cout << "Invalid choice. Try again.\n";
         }
-    } while (choice != 4);
+    } while (flag);
 }
 
 void Voter::viewElections()
@@ -379,8 +402,6 @@ void Voter::castVote()
     {
         cout << "Election not found.\n";
     }
-
-    
 }
 
 void Voter::checkVoteStatus()
@@ -391,7 +412,8 @@ void Voter::checkVoteStatus()
 // Administrator methods
 void Administrator::displayMenu()
 {
-    int choice;
+    char choice;
+    bool flag=true;
     do
     {
         cout << "\nAdministrator Menu:\n";
@@ -404,36 +426,156 @@ void Administrator::displayMenu()
 
         switch (choice)
         {
-        case 1:
+        case '1':
             createElection();
             break;
-        case 2:
+        case '2':
             addCandidate();
             break;
-        case 3:
+        case '3':
             viewResults();
             break;
-        case 4:
+        case '4':
             cout << "Logging out...\n";
+            flag=false;
             break;
         default:
             cout << "Invalid choice. Try again.\n";
         }
-    } while (choice != 4);
+    } while (flag);
+}
+bool checkElectionName(string name)
+{
+    // Check if election name already exists in the file
+    ifstream inFile("elections.txt");
+    if (inFile.is_open())
+    {
+        string ename, type, start, end;
+        while (inFile >> ename >> type >> start >> end)
+        {
+            if (ename == name)
+            {
+                cout << "Election name already exists. Please choose another name.\n";
+                inFile.close();
+                return false;
+            }
+        }
+        inFile.close();
+    }
+    return true;
+}
+// bool checkdateformat()
+// {
+    
+//     // Check if start date is before end date
+//     struct tm tmStart = {0}, tmEnd = {0};
+//     strptime(start.c_str(), "%Y-%m-%d", &tmStart);
+//     strptime(end.c_str(), "%Y-%m-%d", &tmEnd);
+
+//     if (difftime(mktime(&tmStart), mktime(&tmEnd)) > 0)
+//     {
+//         cout << "Start date must be before end date.\n";
+//         return false;
+//     }
+//     return true;
+// }
+// bool checkElectionDate(string start, string end)
+// {
+//     // Check if start date is before end date
+//     struct tm tmStart = {0}, tmEnd = {0};
+//     strptime(start.c_str(), "%Y-%m-%d", &tmStart);
+//     strptime(end.c_str(), "%Y-%m-%d", &tmEnd);
+
+//     if (difftime(mktime(&tmStart), mktime(&tmEnd)) > 0)
+//     {
+//         cout << "Start date must be before end date.\n";
+//         return false;
+//     }
+//     return true;
+// }
+
+bool parseDate(const string& dateStr, tm& date)
+{
+    istringstream ss(dateStr);
+    ss >> get_time(&date, "%Y-%m-%d");
+    return !ss.fail();
 }
 
+bool isStartBeforeEnd(const string& start, const string& end)
+{
+    tm tmStart = {}, tmEnd = {};
+
+    istringstream ssStart(start);
+    istringstream ssEnd(end);
+
+    ssStart >> get_time(&tmStart, "%Y-%m-%d");
+    ssEnd >> get_time(&tmEnd, "%Y-%m-%d");
+
+    // Check parsing success
+    if (ssStart.fail() || ssEnd.fail())
+        return false;
+
+    // Convert to time_t for comparison
+    time_t tStart = mktime(&tmStart);
+    time_t tEnd = mktime(&tmEnd);
+
+    // If conversion failed, return false
+    if (tStart == -1 || tEnd == -1)
+        return false;
+
+    return tStart <= tEnd;
+}
+bool isValidDateFormat(const string& dateStr)
+{
+    if (dateStr.length() != 10 || dateStr[4] != '-' || dateStr[7] != '-')
+        return false;
+
+    tm date = {};
+    istringstream ss(dateStr);
+    ss >> get_time(&date, "%Y-%m-%d");
+
+    if (ss.fail()) return false;
+
+    // Check range validity
+    if (date.tm_year < 0 || date.tm_mon < 0 || date.tm_mon > 11 || date.tm_mday < 1 || date.tm_mday > 31)
+        return false;
+
+    return true;
+}
 void Administrator::createElection()
 {
     string name, type, start, end;
+    Tag1:
     cout << "Enter election name: ";
     cin >> name;
+    if (!checkElectionName(name))
+    {
+        goto Tag1;
+    }
     cout << "Enter election type (local/national): ";
     cin >> type;
+    Tag:
+    Tag2:
     cout << "Enter start date (YYYY-MM-DD): ";
     cin >> start;
+    if(!isValidDateFormat(start))
+    {
+        cout<<"Invalid date format. Please enter date in YYYY-MM-DD format.\n";
+        goto Tag2;
+    }
+    Tag3:
     cout << "Enter end date (YYYY-MM-DD): ";
     cin >> end;
-
+    if(!isValidDateFormat(end))
+    {
+        cout<<"Invalid date format. Please enter date in YYYY-MM-DD format.\n";
+        goto Tag3;
+    }
+    if(!isStartBeforeEnd(start, end))
+    {
+        cout << "Start date must be before end date.Re enter the Dates!\n";
+        goto Tag;
+    }
     Election *election = nullptr;
     if (type == "local")
     {
@@ -516,6 +658,22 @@ void LocalElection::conductElection()
     cout << "Conducting local election for " << district << " district" << endl;
 }
 
+void ShowWinner(string electionName)
+{
+    int count;
+    Candidate *candidates = Candidate::loadCandidates(electionName, count);
+    int maxVotes = 0;
+    string winnerName;
+    for (int i = 0; i < count; i++)
+    {
+        if (candidates[i].getVotes() > maxVotes)
+        {
+            maxVotes = candidates[i].getVotes();
+            winnerName = candidates[i].getName();
+        }
+    }
+    cout << "Winner of the election " << electionName << " is " << winnerName << " with " << maxVotes << " votes.\n";
+}
 void LocalElection::displayResults()
 {
     cout << "\nResults for Local Election: " << name << endl;
@@ -529,6 +687,8 @@ void LocalElection::displayResults()
         cout << candidates[i].getName() << " (" << candidates[i].getParty()
              << "): " << candidates[i].getVotes() << " votes" << endl;
     }
+    ShowWinner(name);
+    // cout << "Winner of the election " << name << " is " << candidates[0].getName() << " with " << candidates[0].getVotes() << " votes.\n";
     delete[] candidates;
 }
 
@@ -558,80 +718,139 @@ void NationalElection::displayResults()
         cout << candidates[i].getName() << " (" << candidates[i].getParty()
              << "): " << candidates[i].getVotes() << " votes" << endl;
     }
+    ShowWinner(name);
+    
     delete[] candidates;
 }
-
-// Main program
-int main()
+bool CheckCNIClogin(string cnic)
 {
-    cout<<"\nOnline Voting System\n";
-    // Initialize some sample data
-    ofstream userFile("users.txt");
-    if (userFile.is_open())
+    // Check if CNIC is valid (for simplicity, just check length)
+    if (cnic.length() != 13)
     {
-        userFile << "admin 123 admin\n";
-        userFile << "voter 123 voter\n";
-        userFile << "hamza 123 voter\n";
-        userFile.close();
+        cout << "Invalid lenght of CNIC. Please enter a valid 13-digit CNIC.\n";
+        return false;
+    }
+    for (int i = 0; i < cnic.length(); i++)
+    {
+        if (!isdigit(cnic[i]))
+        {
+            cout << "Invalid Digits of CNIC. Please enter a valid 13-digit CNIC.\n";
+            return false;
+        }
+    }
+    if (!(cnic[0] == '3' && cnic[1] == '6' && cnic[2] == '5' && cnic[3] == '0' && cnic[4] == '2'))
+    {
+        cout << "Invalid First Five Digits CNIC. Please enter a valid 13-digit CNIC.\n";
+        ;
+        return false;
+    }
+    return true;
+}
+
+bool CheckCNIC(string cnic)
+{
+    // Check if CNIC is valid (for simplicity, just check length)
+    if (cnic.length() != 13)
+    {
+        cout << "Invalid lenght of CNIC. Please enter a valid 13-digit CNIC.\n";
+        return false;
+    }
+    for (int i = 0; i < cnic.length(); i++)
+    {
+        if (!isdigit(cnic[i]))
+        {
+            cout << "Invalid Digits of CNIC. Please enter a valid 13-digit CNIC.\n";
+            return false;
+        }
+    }
+    if (!(cnic[0] == '3' && cnic[1] == '6' && cnic[2] == '5' && cnic[3] == '0' && cnic[4] == '2'))
+    {
+        cout << "Invalid First Five Digits CNIC. Please enter a valid 13-digit CNIC.\n";
+        ;
+        return false;
     }
 
-    int choice;
+    // Check if CNIC already exists in the file
+    ifstream inFile("users.txt");
+    if (inFile.is_open())
+    {
+        string uname, pwd, role;
+        while (inFile >> uname >> pwd >> role)
+        {
+            if (uname == cnic)
+            {
+                cout << "CNIC already exists. Please Register with another CNIC or Login using this!\n";
+                DisplayMainMenu();
+                inFile.close();
+                return true;
+            }
+        }
+        inFile.close();
+    }
+    return true;
+}
+
+void DisplayMainMenu()
+{
+
+    char choice;
+    // if (choice == '0' && choice == 1 && choice == 2 && choice == 3 && choice == 4)
+    // {
+    //     cout << "Invalid choice. Try again.\n";
+    // }
     do
     {
         cout << "\nOnline Voting System\n";
-        cout << "1. Login\n";
-        cout << "2. Register as Voter\n";
-        cout << "3. Exit\n";
+        cout << "1. Login AS Admin \n";
+        cout << "2. Login AS Voter \n";
+        cout << "3. Register as Voter\n";
+        cout << "4. Exit\n";
         cout << "Enter your choice: ";
         cin >> choice;
 
         switch (choice)
         {
-        case 1:
+        case '1':
         {
-            // Login functionality
-            // int select;
-            // cout << "Select role:\n1. Voter\n2. Admin\n";
-            // cout << "Enter your choice: ";
-            // cin >> select;
-            // switch (select)
-            // {
-            // case 1:
-            // {
-            //     string username, password;
-            //     cout << "Enter username: ";
-            //     cin >> username;
-            //     cout << "Enter password: ";
-            //     cin >> password;
-            //     cout << "Login as Voter\n";
-            //     User *user = User::authenticateUser(username, password);
-            //     user->displayMenu();
-            //     break;
-            // }
-            // case 2:
-            // {
-            //     // Login as admin
-            //     string uname, pass;
-            //     cout << "Enter username: ";
-            //     cin >> uname;
-            //     cout << "Enter password: ";
-            //     cin >> pass;
-            //     cout << "Login as Admin\n";
-            //     User *user = User::authenticateUser(uname, pass);
-            //     break;
-            // }
-            // default:
-            //     cout << "Invalid choice. Try again.\n";
-            //     break;
-            // }
-
-            string username, password;
-            cout << "Enter username: ";
-            cin >> username;
+        Tag1:
+            string cnic, password;
+            cout << "Enter CNIC: ";
+            cin >> cnic;
+            if (!CheckCNIClogin(cnic))
+            {
+                goto Tag1;
+            }
             cout << "Enter password: ";
             cin >> password;
 
-            User *user = User::authenticateUser(username, password);
+            User *user = User::authenticateAdmin(cnic, password);
+            if (user != nullptr)
+            {
+                user->displayMenu();
+                delete user;
+            }
+            else
+            {
+                cout << "Invalid credentials.\n";
+            }
+    
+            break;
+        }
+
+        case '2':
+        {
+        Tag2:
+            string cnic, password;
+            cout << "Enter CNIC: ";
+            cin >> cnic;
+            if (!CheckCNIClogin(cnic))
+            {
+                goto Tag2;
+            }
+            cout << "Enter password: ";
+            cin >> password;
+
+            User *user = User::authenticatevoter(cnic, password);
             if (user != nullptr)
             {
                 user->displayMenu();
@@ -643,26 +862,57 @@ int main()
             }
             break;
         }
-        case 2:
+        case '3':
         {
-            string username, password;
-            cout << "Choose a username: ";
-            cin >> username;
+        up:
+            string cnic, password;
+            cout << "Choose a CNIC: ";
+            cin >> cnic;
+            if (!CheckCNIC(cnic))
+            {
+                goto up;
+            }
+            // Check if CNIC is valid (for simplicity, just check length)
             cout << "Choose a password: ";
             cin >> password;
 
-            Voter newVoter(username, password);
+            int age;
+            cout << "Enter your age: ";
+            cin >> age;
+            if (age < 18)
+            {
+                cout << "You must be at least 18 years old to register.\n\n";
+                DisplayMainMenu();
+                break;
+            }
+            // Check if username already exists
+            Voter newVoter(cnic, password);
             User::saveToFile(newVoter);
             cout << "Registration successful! You can now login.\n";
-            break;
+            DisplayMainMenu();
         }
-        case 3:
+        case '4':
             cout << "Exiting system. Goodbye!\n";
             break;
         default:
             cout << "Invalid choice. Try again.\n";
         }
     } while (choice != 3);
+}
+// Main program
+int main()
+{
+    cout << "\nOnline Voting System\n";
+    // Initialize some sample data
+    ofstream userFile("users.txt");
+    if (userFile.is_open())
+    {
+        userFile << "3650212345678 123 admin\n";
+        userFile << "3650209876543 123 voter\n";
+        userFile << "3650234567890 123 voter\n";
+        userFile.close();
+    }
 
+    DisplayMainMenu();
     return 0;
 }

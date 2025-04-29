@@ -1,2 +1,6 @@
 CityCouncil ali YellowParty 81
 CityCouncil hassan PurpleParty 67
+CM Ali PTI 8
+CM shameer lota 1
+CM Faisal lota 2
+king pti thtg 0
