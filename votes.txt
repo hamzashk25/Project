@@ -1,3 +1,0 @@
-Mayor voter1 Alice 16
-President john Carol 25 
-CityCouncil voter2 Eve 15

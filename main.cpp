@@ -1,13 +1,13 @@
 // Online Voting System
 
 #include <iostream>
-// #include<ctype>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <cstring>
 #include <ctime>
 #include <iomanip>
+#include <windows.h>
 using namespace std;
 
 // Forward declarations
@@ -22,6 +22,10 @@ class Candidate;
 const int MAX_CANDIDATES = 50;
 const int MAX_USERS = 100;
 const int MAX_ELECTIONS = 20;
+
+// Add this near your other global constants
+bool isElectionActive = false;   // Global election status flag
+string currentElectionName = ""; // Track which election is active
 
 void DisplayMainMenu();
 
@@ -123,7 +127,7 @@ public:
     virtual void displayResults() = 0;
 
     void addCandidate(string name, string party);
-    void saveToFile();
+    virtual void saveToFile() = 0;
     static Election *loadElection(string name);
 };
 
@@ -138,6 +142,8 @@ public:
 
     void displayMenu() override;
     void viewElections();
+    void viewElectionDetails();
+    void viewElectionCandidates();
     void castVote();
     void checkVoteStatus();
 };
@@ -152,6 +158,55 @@ public:
     void createElection();
     void addCandidate();
     void viewResults();
+
+    void startElection()
+    {
+        string electionName;
+        cout << "\033[1;36mEnter election name to start: \033[0m";
+        cin >> electionName;
+
+        // Simple validation - check if election exists
+        ifstream inFile("elections.txt");
+        bool exists = false;
+        if (inFile.is_open())
+        {
+            string name, type, start, end, extraInfo;
+            while (inFile >> name >> type >> start >> end>>extraInfo)
+            {
+                if (name == electionName)
+                {
+                    exists = true;
+                    break;
+                }
+            }
+            inFile.close();
+        }
+
+        if (exists)
+        {
+            isElectionActive = true;
+            currentElectionName = electionName;
+            cout << "\033[1;32mElection started successfully!\033[0m\n";
+        }
+        else
+        {
+            cout << "\033[1;31mElection not found.\033[0m\n";
+        }
+    }
+
+    void endElection()
+    {
+        if (isElectionActive)
+        {
+            isElectionActive = false;
+            cout << "\033[1;32mElection '" << currentElectionName << "' ended successfully!\033[0m\n";
+            currentElectionName = "";
+        }
+        else
+        {
+            cout << "\033[1;31mNo active election to end.\033[0m\n";
+        }
+    }
 };
 
 // LocalElection class
@@ -161,12 +216,21 @@ private:
     string district;
 
 public:
-    LocalElection(string n, string s, string e, string d="Default District")
+    LocalElection(string n, string s, string e, string d = "Default District")
         : Election(n, "local", s, e), district(d) {}
 
-    void displayDetails()  override;
+    void displayDetails() override;
     void conductElection() override;
     void displayResults() override;
+    void saveToFile() override
+    {
+        ofstream outFile("elections.txt", ios::app);
+        if (outFile.is_open())
+        {
+            outFile << name << " " << type << " " << startDate << " " << endDate << " " << district << endl;
+            outFile.close();
+        }
+    }
 };
 
 // NationalElection class
@@ -182,6 +246,15 @@ public:
     void displayDetails() override;
     void conductElection() override;
     void displayResults() override;
+    void saveToFile() override
+    {
+        ofstream outFile("elections.txt", ios::app);
+        if (outFile.is_open())
+        {
+            outFile << name << " " << type << " " << startDate << " " << endDate << " " << country << endl;
+            outFile.close();
+        }
+    }
 };
 
 // Now implement all the methods that were declared earlier:
@@ -285,18 +358,20 @@ Election *Election::loadElection(string name)
     ifstream inFile("elections.txt");
     if (inFile.is_open())
     {
-        string ename, type, start, end;
-        while (inFile >> ename >> type >> start >> end)
+        string ename, type, start, end, extraInfo;
+        while (inFile >> ename >> type >> start >> end >> extraInfo)
         {
             if (ename == name)
             {
                 if (type == "local")
                 {
-                    return new LocalElection(ename, start, end);
+                    // inFile >> extraInfo; // Read district
+                    return new LocalElection(ename, start, end, extraInfo);
                 }
                 else if (type == "national")
                 {
-                    return new NationalElection(ename, start, end);
+                    // inFile >> extraInfo; // Read country
+                    return new NationalElection(ename, start, end, extraInfo);
                 }
             }
         }
@@ -309,15 +384,17 @@ Election *Election::loadElection(string name)
 void Voter::displayMenu()
 {
     char choice;
-    bool flag=true;
+    bool flag = true;
     do
     {
-        cout << "\nVoter Menu:\n";
-        cout << "1. View Elections\n";
-        cout << "2. Cast Vote\n";
-        cout << "3. Check Vote Status\n";
-        cout << "4. Logout\n";
-        cout << "Enter your choice: ";
+        cout << "\033[1;35m\nVoter Menu:\033[0m\n";
+        cout << "\033[1;36m1. View Elections\033[0m\n";
+        cout << "\033[1;36m2. View Election Details\033[0m\n";
+        cout << "\033[1;36m3. View Election Candidates\033[0m\n";
+        cout << "\033[1;36m4. Cast Vote\033[0m\n";
+        cout << "\033[1;36m5. Check Vote Status\033[0m\n";
+        cout << "\033[1;36m6. Logout\033[0m\n";
+        cout << "\033[1;35mEnter your choice: \033[0m";
         cin >> choice;
 
         switch (choice)
@@ -326,31 +403,41 @@ void Voter::displayMenu()
             viewElections();
             break;
         case '2':
-            castVote();
+            viewElectionDetails();
             break;
-        case  '3':
-            checkVoteStatus();
+        case '3':
+            viewElectionCandidates();
             break;
         case '4':
-            cout << "Logging out...\n";
-            flag=false;
+            castVote();
+            break;
+        case '5':
+            checkVoteStatus();
+            break;
+        case '6':
+            cout << "\033[1;32mLogging out...\033[0m\n";
+            flag = false;
             break;
         default:
-            cout << "Invalid choice. Try again.\n";
+            cout << "\033[1;31mInvalid choice. Try again.\033[0m\n";
         }
     } while (flag);
 }
-
 void Voter::viewElections()
 {
     ifstream inFile("elections.txt");
     if (inFile.is_open())
     {
-        string name, type, start, end;
-        cout << "\nAvailable Elections:\n";
-        while (inFile >> name >> type >> start >> end)
+        string name, type, start, end, extraInfo;
+        cout << "\033[1;34m\nAvailable Elections:\033[0m\n";
+        cout<<"Election Name  Type  Start Date  End Date  District/Country\n";
+        while (inFile >> name >> type >> start >> end>>extraInfo)
         {
-            cout << name << " (" << type << "): " << start << " to " << end << endl;
+            cout << "\033[1;36m" << name << "\033[0m   (" 
+                 << "\033[1;33m" << type << "\033[0m): "
+                 << "\033[1;32m" << start << "\033[0m to "
+                 << "\033[1;32m" << end << "\033[0m "
+                 << "\033[1;33m" << extraInfo << "\033[0m\n";
         }
         inFile.close();
     }
@@ -358,9 +445,38 @@ void Voter::viewElections()
 
 void Voter::castVote()
 {
+    if (!isElectionActive)
+    {
+        cout << "\033[1;31mNo election is currently active.\033[0m\n";
+        return;
+    }
+
     string electionName;
-    cout << "Enter election name: ";
+    cout << "\033[1;36mEnter election name: \033[0m";
     cin >> electionName;
+
+    if (electionName != currentElectionName)
+    {
+        cout << "\033[1;31mThis election is not currently active.\033[0m\n";
+        return;
+    }
+
+    // Check if user has already voted
+    ifstream voterfile("voters.txt");
+    if (voterfile.is_open())
+    {
+        string uname, votedElection;
+        while (voterfile >> uname >> votedElection)
+        {
+            if (uname == username && votedElection == electionName)
+            {
+                cout << "\033[1;31mYou have already voted in this election.\033[0m\n";
+                voterfile.close();
+                return;
+            }
+        }
+        voterfile.close();
+    }
 
     Election *election = Election::loadElection(electionName);
     if (election)
@@ -368,21 +484,23 @@ void Voter::castVote()
         int count;
         Candidate *candidates = Candidate::loadCandidates(electionName, count);
 
-        cout << "\nCandidates:\n";
+        cout << "\033[1;34m\nCandidates:\033[0m\n";
         for (int i = 0; i < count; i++)
         {
-            cout << i + 1 << ". " << candidates[i].getName() << " (" << candidates[i].getParty() << ")\n";
+            cout << "\033[1;36m" << i + 1 << ". " << candidates[i].getName() << "\033[0m ("
+                 << "\033[1;33m" << candidates[i].getParty() << "\033[0m)\n";
         }
 
         int choice;
-        cout << "Select candidate (1-" << count << "): ";
+        cout << "\033[1;36mSelect candidate (1-" << count << "): \033[0m";
         cin >> choice;
 
         if (choice > 0 && choice <= count)
         {
             candidates[choice - 1].incrementVotes();
-            // Save updated votes
-            ofstream outFile("candidates.txt", ios::out);
+
+            // Save only updated candidates of this election carefully
+            ofstream outFile("candidates.txt", ios::app);
             if (outFile.is_open())
             {
                 for (int i = 0; i < count; i++)
@@ -392,7 +510,23 @@ void Voter::castVote()
                             << " " << candidates[i].getVotes() << endl;
                 }
                 outFile.close();
-                cout << "Vote cast successfully!\n";
+                cout << "\033[1;32mVote cast successfully!\033[0m\n";
+
+                hasVoted = true;
+                ofstream voterAppend("voters.txt", ios::app);
+                if (voterAppend.is_open())
+                {
+                    voterAppend << username << " " << electionName << endl;
+                    voterAppend.close();
+                }
+                else
+                {
+                    cerr << "\033[1;31mUnable to open voters file for writing.\033[0m\n";
+                }
+            }
+            else
+            {
+                cerr << "\033[1;31mUnable to open candidates file for writing.\033[0m\n";
             }
         }
         delete[] candidates;
@@ -400,28 +534,86 @@ void Voter::castVote()
     }
     else
     {
-        cout << "Election not found.\n";
+        cout << "\033[1;31mElection not found.\033[0m\n";
     }
 }
 
 void Voter::checkVoteStatus()
 {
-    cout << "it's not implemented yet\n";
+    if (hasVoted)
+    {
+        cout << "\033[1;32mYou have already cast your vote.\033[0m\n";
+    }
+    else
+    {
+        cout << "\033[1;31mYou have not cast your vote yet.\033[0m\n";
+    }
+}
+
+void Voter::viewElectionDetails()
+{
+    string electionName;
+    cout << "\033[1;36mEnter election name: \033[0m";
+    cin >> electionName;
+
+    Election *election = Election::loadElection(electionName);
+    if (election)
+    {
+        election->displayDetails();
+        delete election;
+    }
+    else
+    {
+        cout << "\033[1;31mElection not found.\033[0m\n";
+    }
+}
+
+void Voter::viewElectionCandidates()
+{
+    string electionName;
+    cout << "\033[1;36mEnter election name: \033[0m";
+    cin >> electionName;
+
+    Election *election = Election::loadElection(electionName);
+    if (election)
+    {
+        int count;
+        Candidate *candidates = Candidate::loadCandidates(electionName, count);
+
+        cout << "\033[1;34m\nCandidates:\033[0m\n";
+        for (int i = 0; i < count; i++)
+        {
+            cout << "\033[1;36mName: \033[0m" << candidates[i].getName()
+                 << "\t\033[1;33mParty: \033[0m(" << candidates[i].getParty() << ")\n";
+        }
+        delete[] candidates;
+        delete election;
+    }
+    else
+    {
+        cout << "\033[1;31mElection not found.\033[0m\n";
+    }
 }
 
 // Administrator methods
 void Administrator::displayMenu()
 {
     char choice;
-    bool flag=true;
+    bool flag = true;
     do
     {
-        cout << "\nAdministrator Menu:\n";
-        cout << "1. Create Election\n";
-        cout << "2. Add Candidate\n";
-        cout << "3. View Results\n";
-        cout << "4. Logout\n";
-        cout << "Enter your choice: ";
+        cout << endl;
+        cout << "\033[1;35m========================================\033[0m\n";
+        cout << "\033[1;35m|           Administrator Menu         |\033[0m\n";
+        cout << "\033[1;35m========================================\033[0m\n";
+        cout << "\033[1;35m| 1. Create Election                   |\033[0m\n";
+        cout << "\033[1;35m| 2. Add Candidate                     |\033[0m\n";
+        cout << "\033[1;35m| 3. View Results                      |\033[0m\n";
+        cout << "\033[1;35m| 4. Start Election                    |\033[0m\n";
+        cout << "\033[1;35m| 5. End Election                      |\033[0m\n";
+        cout << "\033[1;35m| 6. Logout                            |\033[0m\n";
+        cout << "\033[1;35m========================================\033[0m\n";
+        cout << "\033[1;35mEnter your choice: \033[0m";
         cin >> choice;
 
         switch (choice)
@@ -436,14 +628,21 @@ void Administrator::displayMenu()
             viewResults();
             break;
         case '4':
-            cout << "Logging out...\n";
-            flag=false;
+            startElection();
+            break;
+        case '5':
+            endElection();
+            break;
+        case '6': // Update logout to be case 6 now
+            cout << "\033[1;32mLogging out...\033[0m\n";
+            flag = false;
             break;
         default:
-            cout << "Invalid choice. Try again.\n";
+            cout << "\033[1;31mInvalid choice. Try again.\033[0m\n";
         }
     } while (flag);
 }
+
 bool checkElectionName(string name)
 {
     // Check if election name already exists in the file
@@ -455,7 +654,7 @@ bool checkElectionName(string name)
         {
             if (ename == name)
             {
-                cout << "Election name already exists. Please choose another name.\n";
+                cout << "\033[1;31mElection name already exists. Please choose another name.\033[0m\n";
                 inFile.close();
                 return false;
             }
@@ -464,44 +663,15 @@ bool checkElectionName(string name)
     }
     return true;
 }
-// bool checkdateformat()
-// {
-    
-//     // Check if start date is before end date
-//     struct tm tmStart = {0}, tmEnd = {0};
-//     strptime(start.c_str(), "%Y-%m-%d", &tmStart);
-//     strptime(end.c_str(), "%Y-%m-%d", &tmEnd);
 
-//     if (difftime(mktime(&tmStart), mktime(&tmEnd)) > 0)
-//     {
-//         cout << "Start date must be before end date.\n";
-//         return false;
-//     }
-//     return true;
-// }
-// bool checkElectionDate(string start, string end)
-// {
-//     // Check if start date is before end date
-//     struct tm tmStart = {0}, tmEnd = {0};
-//     strptime(start.c_str(), "%Y-%m-%d", &tmStart);
-//     strptime(end.c_str(), "%Y-%m-%d", &tmEnd);
-
-//     if (difftime(mktime(&tmStart), mktime(&tmEnd)) > 0)
-//     {
-//         cout << "Start date must be before end date.\n";
-//         return false;
-//     }
-//     return true;
-// }
-
-bool parseDate(const string& dateStr, tm& date)
+bool parseDate(const string &dateStr, tm &date)
 {
     istringstream ss(dateStr);
     ss >> get_time(&date, "%Y-%m-%d");
     return !ss.fail();
 }
 
-bool isStartBeforeEnd(const string& start, const string& end)
+bool isStartBeforeEnd(const string &start, const string &end)
 {
     tm tmStart = {}, tmEnd = {};
 
@@ -525,7 +695,7 @@ bool isStartBeforeEnd(const string& start, const string& end)
 
     return tStart <= tEnd;
 }
-bool isValidDateFormat(const string& dateStr)
+bool isValidDateFormat(const string &dateStr)
 {
     if (dateStr.length() != 10 || dateStr[4] != '-' || dateStr[7] != '-')
         return false;
@@ -534,7 +704,8 @@ bool isValidDateFormat(const string& dateStr)
     istringstream ss(dateStr);
     ss >> get_time(&date, "%Y-%m-%d");
 
-    if (ss.fail()) return false;
+    if (ss.fail())
+        return false;
 
     // Check range validity
     if (date.tm_year < 0 || date.tm_mon < 0 || date.tm_mon > 11 || date.tm_mday < 1 || date.tm_mday > 31)
@@ -545,49 +716,50 @@ bool isValidDateFormat(const string& dateStr)
 void Administrator::createElection()
 {
     string name, type, start, end;
-    Tag1:
-    cout << "Enter election name: ";
+Tag1:
+    cout << "\033[1;36mEnter election name: \033[0m";
     cin >> name;
     if (!checkElectionName(name))
     {
         goto Tag1;
     }
-    cout << "Enter election type (local/national): ";
+    cout << "\033[1;36mEnter election type (local/national): \033[0m";
     cin >> type;
-    Tag:
-    Tag2:
-    cout << "Enter start date (YYYY-MM-DD): ";
+Tag:
+Tag2:
+    cout << "\033[1;36mEnter start date (YYYY-MM-DD): \033[0m";
     cin >> start;
-    if(!isValidDateFormat(start))
+    if (!isValidDateFormat(start))
     {
-        cout<<"Invalid date format. Please enter date in YYYY-MM-DD format.\n";
+        cout << "\033[1;31mInvalid date format. Please enter date in YYYY-MM-DD format.\033[0m\n";
         goto Tag2;
     }
-    Tag3:
-    cout << "Enter end date (YYYY-MM-DD): ";
+Tag3:
+    cout << "\033[1;36mEnter end date (YYYY-MM-DD): \033[0m";
     cin >> end;
-    if(!isValidDateFormat(end))
+    if (!isValidDateFormat(end))
     {
-        cout<<"Invalid date format. Please enter date in YYYY-MM-DD format.\n";
+        cout << "\033[1;31mInvalid date format. Please enter date in YYYY-MM-DD format.\033[0m\n";
         goto Tag3;
     }
-    if(!isStartBeforeEnd(start, end))
+    if (!isStartBeforeEnd(start, end))
     {
-        cout << "Start date must be before end date.Re enter the Dates!\n";
+        cout << "\033[1;31mStart date must be before end date. Re-enter the dates!\033[0m\n";
         goto Tag;
     }
+
     Election *election = nullptr;
     if (type == "local")
     {
         string district;
-        cout << "Enter district: ";
+        cout << "\033[1;36mEnter district: \033[0m";
         cin >> district;
         election = new LocalElection(name, start, end, district);
     }
     else if (type == "national")
     {
         string country;
-        cout << "Enter country: ";
+        cout << "\033[1;36mEnter country: \033[0m";
         cin >> country;
         election = new NationalElection(name, start, end, country);
     }
@@ -595,42 +767,42 @@ void Administrator::createElection()
     if (election)
     {
         election->saveToFile();
-        cout << "Election created successfully!\n";
+        cout << "\033[1;32mElection created successfully!\033[0m\n";
         delete election;
     }
     else
     {
-        cout << "Invalid election type.\n";
+        cout << "\033[1;31mInvalid election type.\033[0m\n";
     }
 }
 
 void Administrator::addCandidate()
 {
     string electionName, name, party;
-    cout << "Enter election name: ";
+    cout << "\033[1;36mEnter election name: \033[0m";
     cin >> electionName;
-    cout << "Enter candidate name: ";
+    cout << "\033[1;36mEnter candidate name: \033[0m";
     cin >> name;
-    cout << "Enter party affiliation: ";
+    cout << "\033[1;36mEnter party affiliation: \033[0m";
     cin >> party;
 
     Election *election = Election::loadElection(electionName);
     if (election)
     {
         election->addCandidate(name, party);
-        cout << "Candidate added successfully!\n";
+        cout << "\033[1;32mCandidate added successfully!\033[0m\n";
         delete election;
     }
     else
     {
-        cout << "Election not found.\n";
+        cout << "\033[1;31mElection not found.\033[0m\n";
     }
 }
 
 void Administrator::viewResults()
 {
     string electionName;
-    cout << "Enter election name: ";
+    cout << "\033[1;36mEnter election name: \033[0m";
     cin >> electionName;
 
     Election *election = Election::loadElection(electionName);
@@ -641,21 +813,21 @@ void Administrator::viewResults()
     }
     else
     {
-        cout << "Election not found.\n";
+        cout << "\033[1;31mElection not found.\033[0m\n";
     }
 }
 
 // LocalElection methods
 void LocalElection::displayDetails()
 {
-    cout << "Local Election: " << name << endl;
-    cout << "District: " << district << endl;
-    cout << "Period: " << startDate << " to " << endDate << endl;
+    cout << "\033[1;34mLocal Election: \033[0m" << name << endl;
+    cout << "\033[1;34mDistrict: \033[0m" << district << endl;
+    cout << "\033[1;34mPeriod: \033[0m" << startDate << " to " << endDate << endl;
 }
 
 void LocalElection::conductElection()
 {
-    cout << "Conducting local election for " << district << " district" << endl;
+    cout << "\033[1;32mConducting local election for \033[0m" << district << " district" << endl;
 }
 
 void ShowWinner(string electionName)
@@ -672,76 +844,76 @@ void ShowWinner(string electionName)
             winnerName = candidates[i].getName();
         }
     }
-    cout << "Winner of the election " << electionName << " is " << winnerName << " with " << maxVotes << " votes.\n";
+    cout << "\033[1;32mWinner of the election \033[0m" << electionName << " \033[1;32mis \033[0m" << winnerName << " \033[1;32mwith \033[0m" << maxVotes << " \033[1;32mvotes.\033[0m\n";
 }
 void LocalElection::displayResults()
 {
-    cout << "\nResults for Local Election: " << name << endl;
-    cout << "District: " << district << endl;
+    cout << "\033[1;34m\nResults for Local Election: \033[0m" << name << endl;
+    cout << "\033[1;34mDistrict: \033[0m" << district << endl;
 
     int count;
     Candidate *candidates = Candidate::loadCandidates(name, count);
 
     for (int i = 0; i < count; i++)
     {
-        cout << candidates[i].getName() << " (" << candidates[i].getParty()
-             << "): " << candidates[i].getVotes() << " votes" << endl;
+        cout << "\033[1;34m" << candidates[i].getName() << "\033[0m ("
+             << "\033[1;33m" << candidates[i].getParty() << "\033[0m): "
+             << "\033[1;32m" << candidates[i].getVotes() << " votes\033[0m" << endl;
     }
     ShowWinner(name);
-    // cout << "Winner of the election " << name << " is " << candidates[0].getName() << " with " << candidates[0].getVotes() << " votes.\n";
     delete[] candidates;
 }
 
 // NationalElection methods
 void NationalElection::displayDetails()
 {
-    cout << "National Election: " << name << endl;
-    cout << "Country: " << country << endl;
-    cout << "Period: " << startDate << " to " << endDate << endl;
+    cout << "\033[1;34mNational Election: \033[0m" << name << endl;
+    cout << "\033[1;34mCountry: \033[0m" << country << endl;
+    cout << "\033[1;34mPeriod: \033[0m" << startDate << " to " << endDate << endl;
 }
 
 void NationalElection::conductElection()
 {
-    cout << "Conducting national election for " << country << endl;
+    cout << "\033[1;32mConducting national election for \033[0m" << country << endl;
 }
 
 void NationalElection::displayResults()
 {
-    cout << "\nResults for National Election: " << name << endl;
-    cout << "Country: " << country << endl;
+    cout << "\033[1;34m\nResults for National Election: \033[0m" << name << endl;
+    cout << "\033[1;34mCountry: \033[0m" << country << endl;
 
     int count;
     Candidate *candidates = Candidate::loadCandidates(name, count);
 
     for (int i = 0; i < count; i++)
     {
-        cout << candidates[i].getName() << " (" << candidates[i].getParty()
-             << "): " << candidates[i].getVotes() << " votes" << endl;
+        cout << "\033[1;36m" << candidates[i].getName() << "\033[0m ("
+             << "\033[1;33m" << candidates[i].getParty() << "\033[0m): "
+             << "\033[1;32m" << candidates[i].getVotes() << " votes\033[0m" << endl;
     }
     ShowWinner(name);
-    
+
     delete[] candidates;
 }
+
 bool CheckCNIClogin(string cnic)
 {
-    // Check if CNIC is valid (for simplicity, just check length)
     if (cnic.length() != 13)
     {
-        cout << "Invalid lenght of CNIC. Please enter a valid 13-digit CNIC.\n";
+        cout << "\033[1;31mInvalid length of CNIC. Please enter a valid 13-digit CNIC.\033[0m\n";
         return false;
     }
     for (int i = 0; i < cnic.length(); i++)
     {
         if (!isdigit(cnic[i]))
         {
-            cout << "Invalid Digits of CNIC. Please enter a valid 13-digit CNIC.\n";
+            cout << "\033[1;31mInvalid digits in CNIC. Please enter a valid 13-digit CNIC.\033[0m\n";
             return false;
         }
     }
     if (!(cnic[0] == '3' && cnic[1] == '6' && cnic[2] == '5' && cnic[3] == '0' && cnic[4] == '2'))
     {
-        cout << "Invalid First Five Digits CNIC. Please enter a valid 13-digit CNIC.\n";
-        ;
+        cout << "\033[1;31mInvalid first five digits of CNIC. Please enter a valid 13-digit CNIC.\033[0m\n";
         return false;
     }
     return true;
@@ -749,28 +921,25 @@ bool CheckCNIClogin(string cnic)
 
 bool CheckCNIC(string cnic)
 {
-    // Check if CNIC is valid (for simplicity, just check length)
     if (cnic.length() != 13)
     {
-        cout << "Invalid lenght of CNIC. Please enter a valid 13-digit CNIC.\n";
+        cout << "\033[1;31mInvalid length of CNIC. Please enter a valid 13-digit CNIC.\033[0m\n";
         return false;
     }
     for (int i = 0; i < cnic.length(); i++)
     {
         if (!isdigit(cnic[i]))
         {
-            cout << "Invalid Digits of CNIC. Please enter a valid 13-digit CNIC.\n";
+            cout << "\033[1;31mInvalid digits in CNIC. Please enter a valid 13-digit CNIC.\033[0m\n";
             return false;
         }
     }
     if (!(cnic[0] == '3' && cnic[1] == '6' && cnic[2] == '5' && cnic[3] == '0' && cnic[4] == '2'))
     {
-        cout << "Invalid First Five Digits CNIC. Please enter a valid 13-digit CNIC.\n";
-        ;
+        cout << "\033[1;31mInvalid first five digits of CNIC. Please enter a valid 13-digit CNIC.\033[0m\n";
         return false;
     }
 
-    // Check if CNIC already exists in the file
     ifstream inFile("users.txt");
     if (inFile.is_open())
     {
@@ -779,7 +948,7 @@ bool CheckCNIC(string cnic)
         {
             if (uname == cnic)
             {
-                cout << "CNIC already exists. Please Register with another CNIC or Login using this!\n";
+                cout << "\033[1;31mCNIC already exists. Please register with another CNIC or login using this!\033[0m\n";
                 DisplayMainMenu();
                 inFile.close();
                 return true;
@@ -789,23 +958,17 @@ bool CheckCNIC(string cnic)
     }
     return true;
 }
-
+// Function to display the main menu and handle user input
 void DisplayMainMenu()
 {
-
     char choice;
-    // if (choice == '0' && choice == 1 && choice == 2 && choice == 3 && choice == 4)
-    // {
-    //     cout << "Invalid choice. Try again.\n";
-    // }
     do
     {
-        cout << "\nOnline Voting System\n";
-        cout << "1. Login AS Admin \n";
-        cout << "2. Login AS Voter \n";
-        cout << "3. Register as Voter\n";
-        cout << "4. Exit\n";
-        cout << "Enter your choice: ";
+        cout << "\033[1;35m1. Login AS Admin\033[0m\n";
+        cout << "\033[1;35m2. Login AS Voter\033[0m\n";
+        cout << "\033[1;35m3. Register as Voter\033[0m\n";
+        cout << "\033[1;35m4. Exit\033[0m\n";
+        cout << "\033[1;35mEnter your choice: \033[0m";
         cin >> choice;
 
         switch (choice)
@@ -814,13 +977,13 @@ void DisplayMainMenu()
         {
         Tag1:
             string cnic, password;
-            cout << "Enter CNIC: ";
+            cout << "\033[1;36mEnter CNIC: \033[0m";
             cin >> cnic;
             if (!CheckCNIClogin(cnic))
             {
                 goto Tag1;
             }
-            cout << "Enter password: ";
+            cout << "\033[1;36mEnter password: \033[0m";
             cin >> password;
 
             User *user = User::authenticateAdmin(cnic, password);
@@ -831,9 +994,9 @@ void DisplayMainMenu()
             }
             else
             {
-                cout << "Invalid credentials.\n";
+                cout << "\033[1;31mInvalid credentials.\033[0m\n";
             }
-    
+
             break;
         }
 
@@ -841,13 +1004,13 @@ void DisplayMainMenu()
         {
         Tag2:
             string cnic, password;
-            cout << "Enter CNIC: ";
+            cout << "\033[1;36mEnter CNIC: \033[0m";
             cin >> cnic;
             if (!CheckCNIClogin(cnic))
             {
                 goto Tag2;
             }
-            cout << "Enter password: ";
+            cout << "\033[1;36mEnter password: \033[0m";
             cin >> password;
 
             User *user = User::authenticatevoter(cnic, password);
@@ -858,60 +1021,70 @@ void DisplayMainMenu()
             }
             else
             {
-                cout << "Invalid credentials.\n";
+                cout << "\033[1;31mInvalid credentials.\033[0m\n";
             }
             break;
         }
+
         case '3':
         {
         up:
             string cnic, password;
-            cout << "Choose a CNIC: ";
+            cout << "\033[1;36mChoose a CNIC: \033[0m";
             cin >> cnic;
             if (!CheckCNIC(cnic))
             {
                 goto up;
             }
-            // Check if CNIC is valid (for simplicity, just check length)
-            cout << "Choose a password: ";
+
+            cout << "\033[1;36mChoose a password: \033[0m";
             cin >> password;
 
             int age;
-            cout << "Enter your age: ";
+            cout << "\033[1;36mEnter your age: \033[0m";
             cin >> age;
             if (age < 18)
             {
-                cout << "You must be at least 18 years old to register.\n\n";
+                cout << "\033[1;31mYou must be at least 18 years old to register.\033[0m\n\n";
                 DisplayMainMenu();
                 break;
             }
-            // Check if username already exists
+
             Voter newVoter(cnic, password);
             User::saveToFile(newVoter);
-            cout << "Registration successful! You can now login.\n";
+            cout << "\033[1;32mRegistration successful! You can now login.\033[0m\n";
             DisplayMainMenu();
-        }
-        case '4':
-            cout << "Exiting system. Goodbye!\n";
             break;
-        default:
-            cout << "Invalid choice. Try again.\n";
         }
-    } while (choice != 3);
+
+        case '4':
+            cout << "\033[1;32mExiting system. Goodbye!\033[0m\n";
+            break;
+
+        default:
+            cout << "\033[1;31mInvalid choice. Try again.\033[0m\n";
+        }
+    } while (choice != '4');
 }
+
 // Main program
 int main()
 {
-    cout << "\nOnline Voting System\n";
+    cout << "\033[1;32m";
+    cout << "       ============================================================\n";
+    cout << "                      Welcome to Online Voting System              \n";
+    cout << "       ============================================================\n";
+    cout << "\033[0m";
+    cout << endl;
     // Initialize some sample data
-    ofstream userFile("users.txt");
-    if (userFile.is_open())
-    {
-        userFile << "3650212345678 123 admin\n";
-        userFile << "3650209876543 123 voter\n";
-        userFile << "3650234567890 123 voter\n";
-        userFile.close();
-    }
+    // ofstream userFile("users.txt");
+    // if (userFile.is_open())
+    // {
+    //     userFile << "3650212345678 123 admin\n";
+    //     userFile << "3650212345678 123 voter\n";
+    //     userFile << "3650234567890 123 voter\n";
+    //     userFile.close();
+    // }
 
     DisplayMainMenu();
     return 0;
