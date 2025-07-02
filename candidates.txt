@@ -1,2 +1,4 @@
-PM Awais lion 1
-PM hamza lion 0
+PM Awais lion 10
+PM hamza lion 6
+PM Awais lion 11
+PM hamza lion 6

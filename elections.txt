@@ -1,4 +1,4 @@
 President national 2024-11-01 2024-11-15 UK
 CityCouncil national 2023-06-10 2023-06-20 America
 CM local 2024-01-01 2024-01-10 lahore
-PM national 2025-01-01 2025-01-10 Pakistan
+PM local 2025-01-01 2024-06-10 Pakistan

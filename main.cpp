@@ -7,6 +7,7 @@
 #include <cstring>
 #include <ctime>
 #include <iomanip>
+#include <limits>
 #include <windows.h>
 using namespace std;
 
@@ -28,6 +29,38 @@ bool isElectionActive = false;   // Global election status flag
 string currentElectionName = ""; // Track which election is active
 
 void DisplayMainMenu();
+
+class Validation {
+public:
+    static int getValidatedInt(const std::string& prompt, int min , int max );
+};
+
+int Validation::getValidatedInt(const string &prompt, int minval, int (maxval))
+{
+    int value;
+    while (true)
+    {
+        cout << prompt;
+        if (cin >> value)
+        {
+            if (value >= minval && value <= maxval)
+            {
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                return value;
+            }
+            else
+            {
+                cout << "Please enter a number between " << minval << " and " << maxval << ".\n";
+            }
+        }
+        else
+        {
+            cout << "Invalid input. Please enter a valid number.\n";
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        }
+    }
+}
 
 // Base User class
 class User
@@ -171,7 +204,7 @@ public:
         if (inFile.is_open())
         {
             string name, type, start, end, extraInfo;
-            while (inFile >> name >> type >> start >> end>>extraInfo)
+            while (inFile >> name >> type >> start >> end >> extraInfo)
             {
                 if (name == electionName)
                 {
@@ -301,6 +334,7 @@ User *User::authenticatevoter(const string &username, const string &password)
     }
     return nullptr;
 }
+
 // Candidate methods
 Candidate *Candidate::loadCandidates(string electionName, int &count)
 {
@@ -383,7 +417,7 @@ Election *Election::loadElection(string name)
 // Voter methods
 void Voter::displayMenu()
 {
-    char choice;
+    int choice;
     bool flag = true;
     do
     {
@@ -394,27 +428,27 @@ void Voter::displayMenu()
         cout << "\033[1;36m4. Cast Vote\033[0m\n";
         cout << "\033[1;36m5. Check Vote Status\033[0m\n";
         cout << "\033[1;36m6. Logout\033[0m\n";
-        cout << "\033[1;35mEnter your choice: \033[0m";
-        cin >> choice;
+        // cout << "\033[1;35mEnter your choice: \033[0m";
+        choice = Validation::getValidatedInt("\033[1;35mEnter your choice: \033[0m", 1, 6);
 
         switch (choice)
         {
-        case '1':
+        case 1:
             viewElections();
             break;
-        case '2':
+        case 2:
             viewElectionDetails();
             break;
-        case '3':
+        case 3:
             viewElectionCandidates();
             break;
-        case '4':
+        case 4:
             castVote();
             break;
-        case '5':
+        case 5:
             checkVoteStatus();
             break;
-        case '6':
+        case 6:
             cout << "\033[1;32mLogging out...\033[0m\n";
             flag = false;
             break;
@@ -430,10 +464,10 @@ void Voter::viewElections()
     {
         string name, type, start, end, extraInfo;
         cout << "\033[1;34m\nAvailable Elections:\033[0m\n";
-        cout<<"Election Name  Type  Start Date  End Date  District/Country\n";
-        while (inFile >> name >> type >> start >> end>>extraInfo)
+        cout << "Election Name  Type  Start Date  End Date  District/Country\n";
+        while (inFile >> name >> type >> start >> end >> extraInfo)
         {
-            cout << "\033[1;36m" << name << "\033[0m   (" 
+            cout << "\033[1;36m" << name << "\033[0m   ("
                  << "\033[1;33m" << type << "\033[0m): "
                  << "\033[1;32m" << start << "\033[0m to "
                  << "\033[1;32m" << end << "\033[0m "
@@ -461,6 +495,32 @@ void Voter::castVote()
         return;
     }
 
+    // ===== ADD TIME VALIDATION HERE ===== //
+    Election *election = Election::loadElection(electionName);
+    if (!election)
+    {
+        cout << "\033[1;31mElection not found.\033[0m\n";
+        return;
+    }
+
+    // Check if election has expired
+    time_t now = time(0);                          // Get current system time as number of seconds since epoch (Jan 1, 1970)
+    tm endTm = {};                                 // Create a tm struct to store the election's end date components
+    istringstream ss(election->getEndDate());      // Create a string stream to parse the end date string (format: "YYYY-MM-DD")
+    ss >> get_time(&endTm, "%Y-%m-%d");            // Parse the date string into the tm struct using the specified format
+                                                   // %Y = 4-digit year, %m = 2-digit month, %d = 2-digit day
+
+    time_t endTime = mktime(&endTm);               // Convert the tm struct to time_t (seconds since epoch) for comparison
+
+    if (now > endTime)                             // Compare current time with election end time
+    {
+                                                    // If current time is AFTER end time, voting period has ended
+        cout << "\033[1;31mVoting period ended on " << election->getEndDate() << ". Cannot vote now.\033[0m\n";
+        delete election;                           // Clean up allocated memory
+        return;                                    // Exit the function early
+    }
+    // ===== END OF TIME VALIDATION ===== //
+
     // Check if user has already voted
     ifstream voterfile("voters.txt");
     if (voterfile.is_open())
@@ -478,7 +538,7 @@ void Voter::castVote()
         voterfile.close();
     }
 
-    Election *election = Election::loadElection(electionName);
+    // Election *election = Election::loadElection(electionName);
     if (election)
     {
         int count;
@@ -598,7 +658,7 @@ void Voter::viewElectionCandidates()
 // Administrator methods
 void Administrator::displayMenu()
 {
-    char choice;
+    int choice;
     bool flag = true;
     do
     {
@@ -613,27 +673,27 @@ void Administrator::displayMenu()
         cout << "\033[1;35m| 5. End Election                      |\033[0m\n";
         cout << "\033[1;35m| 6. Logout                            |\033[0m\n";
         cout << "\033[1;35m========================================\033[0m\n";
-        cout << "\033[1;35mEnter your choice: \033[0m";
-        cin >> choice;
+        // cout << "\033[1;35mEnter your choice: \033[0m";
+        choice = Validation::getValidatedInt("\033[1;35mEnter your choice: \033[0m", 1, 6);
 
         switch (choice)
         {
-        case '1':
+        case 1:
             createElection();
             break;
-        case '2':
+        case 2:
             addCandidate();
             break;
-        case '3':
+        case 3:
             viewResults();
             break;
-        case '4':
+        case 4:
             startElection();
             break;
-        case '5':
+        case 5:
             endElection();
             break;
-        case '6': // Update logout to be case 6 now
+        case 6: // Update logout to be case 6 now
             cout << "\033[1;32mLogging out...\033[0m\n";
             flag = false;
             break;
@@ -846,6 +906,7 @@ void ShowWinner(string electionName)
     }
     cout << "\033[1;32mWinner of the election \033[0m" << electionName << " \033[1;32mis \033[0m" << winnerName << " \033[1;32mwith \033[0m" << maxVotes << " \033[1;32mvotes.\033[0m\n";
 }
+
 void LocalElection::displayResults()
 {
     cout << "\033[1;34m\nResults for Local Election: \033[0m" << name << endl;
@@ -854,12 +915,27 @@ void LocalElection::displayResults()
     int count;
     Candidate *candidates = Candidate::loadCandidates(name, count);
 
+    cout << left << setw(20) << "Candidate" << setw(20) << "Party" << "Votes\n";
+    cout << "---------------------------------------------\n";
     for (int i = 0; i < count; i++)
     {
-        cout << "\033[1;34m" << candidates[i].getName() << "\033[0m ("
-             << "\033[1;33m" << candidates[i].getParty() << "\033[0m): "
-             << "\033[1;32m" << candidates[i].getVotes() << " votes\033[0m" << endl;
+        cout << setw(20) << candidates[i].getName()
+             << setw(20) << candidates[i].getParty()
+             << candidates[i].getVotes() << endl;
     }
+
+    
+    cout << "\nVote Distribution:\n";
+    for (int i = 0; i < count; i++)
+    {
+        cout << candidates[i].getName() << " | ";
+        for (int j = 0; j < candidates[i].getVotes(); j++)
+        {
+            cout << "#"; // Block character for bars
+        }
+        cout << " (" << candidates[i].getVotes() << " votes)\n";
+    }
+
     ShowWinner(name);
     delete[] candidates;
 }
@@ -895,6 +971,7 @@ void NationalElection::displayResults()
 
     delete[] candidates;
 }
+
 
 bool CheckCNIClogin(string cnic)
 {
@@ -958,22 +1035,24 @@ bool CheckCNIC(string cnic)
     }
     return true;
 }
+
+
 // Function to display the main menu and handle user input
 void DisplayMainMenu()
 {
-    char choice;
+    int choice;
     do
     {
         cout << "\033[1;35m1. Login AS Admin\033[0m\n";
         cout << "\033[1;35m2. Login AS Voter\033[0m\n";
         cout << "\033[1;35m3. Register as Voter\033[0m\n";
         cout << "\033[1;35m4. Exit\033[0m\n";
-        cout << "\033[1;35mEnter your choice: \033[0m";
-        cin >> choice;
+        // cout << "\033[1;35mEnter your choice: \033[0m";
+        choice = Validation::getValidatedInt("\033[1;35mEnter your choice: \033[0m", 1, 4);
 
         switch (choice)
         {
-        case '1':
+        case 1:
         {
         Tag1:
             string cnic, password;
@@ -1000,7 +1079,7 @@ void DisplayMainMenu()
             break;
         }
 
-        case '2':
+        case 2:
         {
         Tag2:
             string cnic, password;
@@ -1026,7 +1105,7 @@ void DisplayMainMenu()
             break;
         }
 
-        case '3':
+        case 3:
         {
         up:
             string cnic, password;
@@ -1057,7 +1136,7 @@ void DisplayMainMenu()
             break;
         }
 
-        case '4':
+        case 4:
             cout << "\033[1;32mExiting system. Goodbye!\033[0m\n";
             break;
 
